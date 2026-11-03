@@ -3,6 +3,7 @@ package com.tmejs.tenantmicro.admin;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -54,6 +55,6 @@ public class TenantAdminController {
     }
 
     record CreateTenantRequest(@NotBlank @Pattern(regexp = "[a-z][a-z0-9-]{2,62}") String id,
-                               @NotBlank String name) { }
+                               @NotBlank @Size(max = 200) String name) { }
     record TenantResponse(String id, String name) { }
 }

@@ -29,6 +29,8 @@ class AdminTenantIT extends IntegrationEnvironment {
         assertThat(request("POST", "/api/admin/tenants", admin, body).statusCode()).isEqualTo(201);
         assertThat(request("POST", "/api/admin/tenants", admin, body).statusCode()).isEqualTo(409);
         assertThat(request("POST", "/api/admin/tenants", admin, "{\"id\":\"BAD ID\",\"name\":\" \"}").statusCode()).isEqualTo(400);
+        assertThat(request("POST", "/api/admin/tenants", admin,
+                "{\"id\":\"" + slug() + "\",\"name\":\"" + "x".repeat(201) + "\"}").statusCode()).isEqualTo(400);
         assertThat(request("PUT", "/api/admin/tenants/missing-" + tenant + "/members/someone", admin, null).statusCode()).isEqualTo(404);
     }
 
