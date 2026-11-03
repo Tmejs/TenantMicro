@@ -28,5 +28,28 @@
         }
       ]
     }
+  ],
+  "users": [
+    {
+      "username": "platform-admin",
+      "enabled": true,
+      "email": "platform-admin@example.test",
+      "emailVerified": true,
+      "firstName": "Platform",
+      "lastName": "Admin",
+      "requiredActions": [],
+      "credentials": [{ "type": "password", "value": "platform-admin-dev", "temporary": false }],
+      "realmRoles": ["PLATFORM_ADMIN"]
+    },
+    {
+      "username": "alice",
+      "enabled": true,
+      "email": "alice@example.test",
+      "emailVerified": true,
+      "firstName": "Alice",
+      "lastName": "Example",
+      "requiredActions": [],
+      "credentials": [{ "type": "password", "value": "alice-dev", "temporary": false }]
+    }
   ]
 }

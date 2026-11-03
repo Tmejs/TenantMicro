@@ -1,5 +1,6 @@
 package com.tmejs.tenantmicro.security;
 
+import com.tmejs.tenantmicro.admin.TenantCatalog;
 import java.time.Duration;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -17,12 +18,13 @@ import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
 class SecurityConfig {
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    SecurityFilterChain securityFilterChain(HttpSecurity http, TenantCatalog catalog) throws Exception {
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
         converter.setJwtGrantedAuthoritiesConverter(new RealmRoleConverter());
         return http
@@ -32,6 +34,7 @@ class SecurityConfig {
                         .requestMatchers("/api/admin/**").hasRole("PLATFORM_ADMIN")
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth.jwt(jwt -> jwt.jwtAuthenticationConverter(converter)))
+                .addFilterAfter(new TenantRequestFilter(catalog), BearerTokenAuthenticationFilter.class)
                 .build();
     }
 

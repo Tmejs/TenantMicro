@@ -50,7 +50,7 @@ abstract class IntegrationEnvironment {
     }
 
     String token(String username, String clientId) throws Exception {
-        String password = username.equals("admin") ? "admin-pass" : "alice-pass";
+        String password = username + "-pass";
         String body = "grant_type=password&client_id=" + encode(clientId) + "&username=" + encode(username)
                 + "&password=" + encode(password);
         HttpRequest request = HttpRequest.newBuilder(URI.create(issuer() + "/protocol/openid-connect/token"))
@@ -76,7 +76,15 @@ abstract class IntegrationEnvironment {
     }
 
     HttpResponse<String> get(String path, String bearerToken) throws Exception {
-        HttpRequest.Builder request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path)).GET();
+        return request("GET", path, bearerToken, null);
+    }
+
+    HttpResponse<String> request(String method, String path, String bearerToken, String body) throws Exception {
+        HttpRequest.Builder request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
+                .method(method, body == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(body));
+        if (body != null) {
+            request.header("Content-Type", "application/json");
+        }
         if (bearerToken != null) {
             request.header("Authorization", "Bearer " + bearerToken);
         }

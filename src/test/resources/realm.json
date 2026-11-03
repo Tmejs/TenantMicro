@@ -57,6 +57,16 @@
       "lastName": "Example",
       "requiredActions": [],
       "credentials": [ { "type": "password", "value": "alice-pass", "temporary": false } ]
+    },
+    {
+      "username": "bob",
+      "enabled": true,
+      "email": "bob@example.test",
+      "emailVerified": true,
+      "firstName": "Bob",
+      "lastName": "Example",
+      "requiredActions": [],
+      "credentials": [ { "type": "password", "value": "bob-pass", "temporary": false } ]
     }
   ]
 }
