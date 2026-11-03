@@ -1,6 +1,6 @@
 # TenantMicro
 
-TenantMicro is a learning project for a shared-table multitenant Spring web service. It currently provides Keycloak JWT authentication, platform-admin tenant and membership management, and a verified tenant request boundary. Project and issue APIs are planned next.
+TenantMicro is a learning project for a shared-table multitenant Spring web service. It currently provides Keycloak JWT authentication, platform-admin tenant and membership management, verified tenant request boundaries, and tenant-owned projects. Issue and board APIs are planned next.
 
 ## Prerequisites
 
@@ -35,5 +35,13 @@ Keycloak's local admin console is at `http://localhost:8080` with `admin` / `adm
 - `DELETE /api/admin/tenants/{tenantId}/members/{subject}` revokes membership idempotently.
 
 `GET /api/tenants/{tenantId}/context` returns the verified tenant ID and JWT subject for an authorized member. Membership is checked against PostgreSQL on every tenant request; a revoked member is denied on the next request.
+
+Tenant members can create and read projects:
+
+- `POST /api/tenants/{tenantId}/projects` with `{ "name": "Delivery" }` creates a project.
+- `GET /api/tenants/{tenantId}/projects` lists that tenant's projects.
+- `GET /api/tenants/{tenantId}/projects/{projectId}` reads one project. A known project ID from another tenant returns `404`.
+
+The project repository is a normal Spring Data `JpaRepository`. Hibernate `@TenantId` fills and filters `tenant_id` from the verified request scope; the API never accepts it from JSON.
 
 The [design](docs/superpowers/specs/2026-11-03-tenantmicro-design.md) and [implementation plan](docs/superpowers/plans/2026-11-03-tenantmicro-implementation.md) describe the upcoming tenant boundaries and Jira-style features.
