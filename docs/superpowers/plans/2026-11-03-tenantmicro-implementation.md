@@ -10,6 +10,8 @@
 
 **Spec:** `docs/superpowers/specs/2026-11-03-tenantmicro-design.md`
 
+**Test-harness amendment (2026-11-03):** At the user's request, checkpoint 6 converts the integration tests to `MockMvc` with a full Spring context and real PostgreSQL/Keycloak Testcontainers. This replaces the random-port HTTP client in the remaining plan. The issue/board task moves to checkpoint 7; its test assertions and isolation goals stay the same.
+
 ## Global Constraints
 
 - Do not use Git worktrees. Each numbered implementation task below is a separate checkpoint branch created from clean synchronized `main`; merge and verify it before starting the next.
@@ -52,7 +54,7 @@ The paths below are the intended small units; keep request DTOs and response DTO
 
 ## Checkpoint routine for every task
 
-For Task N use branch `codex/checkpoint-<N+2>-<short-name>`; checkpoint 1 is the initial documentation plan and checkpoint 2 updates it for JPA repositories. Start each task with the first two steps below, then do its focused implementation steps, then finish the remaining steps in order:
+Tasks 1–3 use branches `codex/checkpoint-<N+2>-<short-name>`; checkpoint 1 is the initial documentation plan and checkpoint 2 updates it for JPA repositories. Checkpoint 6 converts the test harness to MockMvc; Task 4 uses checkpoint 7. Start each task with the first two steps below, then do its focused implementation steps, then finish the remaining steps in order:
 
 - [ ] Confirm `main` and the working tree are clean; `git fetch origin`; inspect unexpected remote commits; confirm `git rev-parse main` equals `git rev-parse origin/main` and `git ls-remote --heads origin main`.
 - [ ] Create the named branch from synchronized `main` in the same checkout, with `git switch -c ...`.
@@ -100,7 +102,7 @@ For Task N use branch `codex/checkpoint-<N+2>-<short-name>`; checkpoint 1 is the
 - [ ] Implement project entity/repository/service/controller, ensuring JPA sessions start only after tenant verification and UUID lookups remain tenant-scoped. Return `201` for create and `404` for an absent/foreign project.
 - [ ] Re-run focused IT and `./mvnw verify`; expect all tests to pass. Complete checkpoint routine and merge before Task 4.
 
-### Task 4: Tenant-scoped issues and board (checkpoint 6)
+### Task 4: Tenant-scoped issues and board (checkpoint 7)
 
 **Files:** Create `Issue.java`, `IssueRepository.java`, `IssueService.java`, `IssueController.java`, `IssueStatus.java`, `IssueIsolationIT.java`, `BoardIT.java`, and `codex/checkpoints/checkpoint-6.md`; update README.
 
@@ -114,6 +116,6 @@ For Task N use branch `codex/checkpoint-<N+2>-<short-name>`; checkpoint 1 is the
 
 ## Final audit
 
-- [ ] Before checkpoint 6's final evidence commit, run a local smoke test against Compose Keycloak/PostgreSQL and record the result. After the merge, run `./mvnw verify` and `git diff --check` on `main`.
+- [ ] Before checkpoint 7's final evidence commit, run a local smoke test against Compose Keycloak/PostgreSQL and record the result. After the merge, run `./mvnw verify` and `git diff --check` on `main`.
 - [ ] Confirm README matches verified endpoints and setup; confirm no test credentials are used in production configuration.
 - [ ] Confirm `main`, `origin/main`, and remote `main` SHAs match, and all checkpoint branches remain available.

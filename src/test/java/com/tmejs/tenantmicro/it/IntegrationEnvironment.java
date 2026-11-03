@@ -9,7 +9,12 @@ import java.nio.charset.StandardCharsets;
 
 import tools.jackson.databind.ObjectMapper;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.GenericContainer;
@@ -17,7 +22,8 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.MountableFile;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest
+@AutoConfigureMockMvc
 abstract class IntegrationEnvironment {
     private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17.6");
     private static final GenericContainer<?> KEYCLOAK = new GenericContainer<>("quay.io/keycloak/keycloak:26.8.1")
@@ -33,8 +39,8 @@ abstract class IntegrationEnvironment {
         KEYCLOAK.start();
     }
 
-    @LocalServerPort
-    int port;
+    @Autowired
+    MockMvc mvc;
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
@@ -75,21 +81,23 @@ abstract class IntegrationEnvironment {
         return token("admin", "tenantmicro-test");
     }
 
-    HttpResponse<String> get(String path, String bearerToken) throws Exception {
+    MvcResponse get(String path, String bearerToken) throws Exception {
         return request("GET", path, bearerToken, null);
     }
 
-    HttpResponse<String> request(String method, String path, String bearerToken, String body) throws Exception {
-        HttpRequest.Builder request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
-                .method(method, body == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(body));
+    MvcResponse request(String method, String path, String bearerToken, String body) throws Exception {
+        var request = MockMvcRequestBuilders.request(HttpMethod.valueOf(method), path);
         if (body != null) {
-            request.header("Content-Type", "application/json");
+            request.contentType(MediaType.APPLICATION_JSON).content(body);
         }
         if (bearerToken != null) {
             request.header("Authorization", "Bearer " + bearerToken);
         }
-        return HTTP.send(request.build(), HttpResponse.BodyHandlers.ofString());
+        var response = mvc.perform(request).andReturn().getResponse();
+        return new MvcResponse(response.getStatus(), response.getContentAsString());
     }
+
+    record MvcResponse(int statusCode, String body) { }
 
     private static String encode(String value) {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
