@@ -2,6 +2,7 @@
   "realm": "tenantmicro-test",
   "enabled": true,
   "sslRequired": "none",
+  "accessTokenLifespan": 5,
   "roles": {
     "realm": [ { "name": "PLATFORM_ADMIN" } ]
   },

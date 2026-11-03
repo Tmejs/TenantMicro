@@ -42,6 +42,7 @@ abstract class IntegrationEnvironment {
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
         registry.add("spring.security.oauth2.resourceserver.jwt.issuer-uri", IntegrationEnvironment::issuer);
+        registry.add("app.security.clock-skew", () -> "1s");
     }
 
     static String issuer() {
@@ -64,6 +65,10 @@ abstract class IntegrationEnvironment {
 
     String userToken() throws Exception {
         return token("alice", "tenantmicro-test");
+    }
+
+    String userToken(String username) throws Exception {
+        return token(username, "tenantmicro-test");
     }
 
     String adminToken() throws Exception {
