@@ -4,9 +4,9 @@
 
 **Goal:** Deliver a learning-focused Spring REST service whose JWT-authenticated requests safely create and read tenant-owned projects and issues in shared PostgreSQL tables.
 
-**Architecture:** Keycloak authenticates users and issues JWTs; the service validates tokens and stores tenant memberships itself. A verified tenant context is established before tenant-owned JPA transactions, Hibernate `@TenantId` scopes ORM access, and database keys prevent cross-tenant issue/project links. Global admin and membership queries use JDBC, avoiding a tenant-scoped Hibernate session during authorization.
+**Architecture:** Keycloak authenticates users and issues JWTs; the service validates tokens and stores tenant memberships itself. Spring Data `JpaRepository` serves both global catalog entities and tenant-owned entities. A short-lived, non-root platform scope authorizes membership and closes its JPA transaction before a verified tenant scope begins; Hibernate `@TenantId` scopes project/issue ORM access, and database keys prevent cross-tenant issue/project links.
 
-**Tech Stack:** Java 21, Spring Boot 4.1.2, Spring MVC, Spring Security OAuth2 Resource Server, Spring Data JPA/Hibernate, JDBC, Flyway, PostgreSQL 17.6, Keycloak 26.8.1, JUnit 5, Testcontainers, Maven.
+**Tech Stack:** Java 21, Spring Boot 4.1.2, Spring MVC, Spring Security OAuth2 Resource Server, Spring Data JPA/Hibernate, Flyway, PostgreSQL 17.6, Keycloak 26.8.1, JUnit 5, Testcontainers, Maven.
 
 **Spec:** `docs/superpowers/specs/2026-11-03-tenantmicro-design.md`
 
@@ -17,6 +17,7 @@
 - No GitHub Actions gate; run focused tests, `./mvnw verify`, and `git diff --check` locally before push.
 - Obtain independent review before each push; fix and re-review Critical/Important findings. Record review and verification in `codex/checkpoints/`.
 - Use real HTTP integration tests with Testcontainers PostgreSQL and Keycloak as the primary test layer. Keep unit tests scarce and purposeful.
+- Use `JpaRepository` for all four entities. Annotate only tenant-owned entities with `@TenantId`, never accept or assign their tenant ID from HTTP bodies, and do not use native/bulk SQL for tenant-owned runtime paths.
 - No code for epics, sprints, frontend, project-level roles, async jobs, or tenant deletion in this plan.
 
 ## Review Focus
@@ -28,6 +29,7 @@ Each condition below gets a named test in its owning task; the context cleanup c
 3. An issue request using a known foreign project UUID must return `404` and create nothing (`IssueIsolationIT` in Task 4).
 4. An exception during a tenant request must clear context on the same thread (`TenantRequestFilterTest` in Task 2).
 5. A non-admin JWT must receive `403` from every admin mutation endpoint (`AdminTenantIT` in Task 2).
+6. A platform-scoped JPA session must not see tenant-owned rows (`ProjectIsolationIT` in Task 3).
 
 ## File map
 
@@ -37,8 +39,8 @@ The paths below are the intended small units; keep request DTOs and response DTO
 - `src/main/resources/application.yml`, `db/migration/V1__core.sql`: configuration and authoritative schema; Hibernate validates rather than generates it.
 - `src/main/java/com/tmejs/tenantmicro/TenantMicroApplication.java`: Boot entry point.
 - `security/SecurityConfig.java`, `security/RealmRoleConverter.java`: JWT validation, audience, role mapping, admin authorization.
-- `security/TenantRequestFilter.java`, `security/VerifiedTenantContext.java`, `persistence/TenantIdentifierResolver.java`: member check, request tenant lifecycle, Hibernate tenant resolution.
-- `admin/TenantAdminController.java`, `admin/TenantAdminService.java`, `admin/TenantCatalog.java`: global tenant and membership management through JDBC.
+- `security/TenantRequestFilter.java`, `security/VerifiedTenantContext.java`, `persistence/TenantIdentifierResolver.java`: platform/tenant scope lifecycle, membership check, and Hibernate tenant resolution.
+- `admin/Tenant.java`, `admin/Membership.java`, `admin/MembershipId.java`, `admin/TenantRepository.java`, `admin/MembershipRepository.java`, `admin/TenantAdminController.java`, `admin/TenantAdminService.java`, `admin/TenantCatalog.java`: global tenant and membership management through JPA repositories. The repositories are only called through the catalog service.
 - `project/Project.java`, `project/ProjectRepository.java`, `project/ProjectService.java`, `project/ProjectController.java`: tenant-owned projects and endpoints.
 - `issue/Issue.java`, `issue/IssueRepository.java`, `issue/IssueService.java`, `issue/IssueController.java`, `issue/IssueStatus.java`: tenant-owned issues, status changes, and board endpoint.
 - `api/ApiExceptionHandler.java`: consistent problem responses.
@@ -50,7 +52,7 @@ The paths below are the intended small units; keep request DTOs and response DTO
 
 ## Checkpoint routine for every task
 
-For Task N use branch `codex/checkpoint-<N+1>-<short-name>`; checkpoint 1 is this documentation plan. Start each task with the first two steps below, then do its focused implementation steps, then finish the remaining steps in order:
+For Task N use branch `codex/checkpoint-<N+2>-<short-name>`; checkpoint 1 is the initial documentation plan and checkpoint 2 updates it for JPA repositories. Start each task with the first two steps below, then do its focused implementation steps, then finish the remaining steps in order:
 
 - [ ] Confirm `main` and the working tree are clean; `git fetch origin`; inspect unexpected remote commits; confirm `git rev-parse main` equals `git rev-parse origin/main` and `git ls-remote --heads origin main`.
 - [ ] Create the named branch from synchronized `main` in the same checkout, with `git switch -c ...`.
@@ -62,9 +64,9 @@ For Task N use branch `codex/checkpoint-<N+1>-<short-name>`; checkpoint 1 is thi
 
 ---
 
-### Task 1: Boot, JWT, and real integration-test harness (checkpoint 2)
+### Task 1: Boot, JWT, and real integration-test harness (checkpoint 3)
 
-**Files:** Create build/wrapper files, application entry point/configuration, security files, `api/ApiExceptionHandler.java`, `dev/realm.json`, `compose.yaml`, `IntegrationEnvironment.java`, `JwtSecurityIT.java`, and `codex/checkpoints/checkpoint-2.md`; update README with verified start/test instructions.
+**Files:** Create build/wrapper files, application entry point/configuration, security files, `api/ApiExceptionHandler.java`, `dev/realm.json`, `compose.yaml`, `IntegrationEnvironment.java`, `JwtSecurityIT.java`, and `codex/checkpoints/checkpoint-3.md`; update README with verified start/test instructions.
 
 **Interfaces:** `RealmRoleConverter` maps Keycloak `realm_access.roles` to `ROLE_*`; `SecurityConfig` validates issuer, audience `tenantmicro-api`, signature, expiry, and secures `/api/admin/**` for `ROLE_PLATFORM_ADMIN`. `IntegrationEnvironment` supplies `adminToken()`, `userToken(String username)`, and an HTTP client configured for a random server port. No tenant APIs yet; a simple authenticated `/api/whoami` endpoint proves the JWT flow and returns `sub`.
 
@@ -74,35 +76,35 @@ For Task N use branch `codex/checkpoint-<N+1>-<short-name>`; checkpoint 1 is thi
 - [ ] Add the Spring Boot entry point, local realm/test users, containers, JWT configuration, role conversion, and `/api/whoami` with the smallest code that satisfies the test. Do not enable password grant on any production client; direct access grants are test-only.
 - [ ] Re-run focused IT and `./mvnw verify`; expect all tests to pass. Complete checkpoint routine and merge before Task 2.
 
-### Task 2: Platform admin, membership, and tenant request boundary (checkpoint 3)
+### Task 2: Platform admin, membership, and tenant request boundary (checkpoint 4)
 
-**Files:** Create `V1__core.sql`, `TenantAdminController.java`, `TenantAdminService.java`, `TenantCatalog.java`, `TenantRequestFilter.java`, `VerifiedTenantContext.java`, `TenantIdentifierResolver.java`, `AdminTenantIT.java`, `TenantMembershipIT.java`, `TenantRequestFilterTest.java`, and `codex/checkpoints/checkpoint-3.md`; update application configuration and README.
+**Files:** Create `V1__core.sql`, global `Tenant`/`Membership` entities and `JpaRepository` interfaces, `TenantAdminController.java`, `TenantAdminService.java`, `TenantCatalog.java`, `TenantRequestFilter.java`, `VerifiedTenantContext.java`, `TenantIdentifierResolver.java`, `AdminTenantIT.java`, `TenantMembershipIT.java`, `TenantRequestFilterTest.java`, and `codex/checkpoints/checkpoint-4.md`; update application configuration and README.
 
-**Interfaces:** `TenantCatalog` uses `JdbcTemplate` for `createTenant(id,name)`, `listTenants()`, `tenantExists(id)`, `grant(tenantId,subject)`, `revoke(tenantId,subject)`, `isMember(tenantId,subject)`. `VerifiedTenantContext.requireTenantId()` returns the verified slug or throws; `TenantIdentifierResolver` implements Hibernate's current-tenant resolver using it. `TenantRequestFilter` runs after JWT authentication, checks the tenant slug and membership, sets context for `/api/tenants/{tenantId}/**`, and clears it in `finally`. Set `spring.jpa.open-in-view=false`.
+**Interfaces:** `TenantRepository extends JpaRepository<Tenant,String>` and `MembershipRepository extends JpaRepository<Membership,MembershipId>` have no `@TenantId`; `MembershipId` is `(tenantId,subject)`. `TenantCatalog` uses those repositories for `createTenant(id,name)`, `listTenants()`, `tenantExists(id)`, `grant(tenantId,subject)`, `revoke(tenantId,subject)`, `isMember(tenantId,subject)` within service transactions. `VerifiedTenantContext.requireTenantId()` returns a verified slug or throws in platform/absent scope; `currentHibernateIdentifier()` returns the tenant slug or reserved `__platform__` and throws when absent. `TenantIdentifierResolver` delegates to the latter and never reports `__platform__` as a root tenant. `TenantRequestFilter` runs after JWT authentication: admin paths get platform scope; tenant paths get platform scope for a membership transaction, close it, then get verified tenant scope for the downstream chain. Each scope clears in `finally`; switching while a JPA transaction/session is open is forbidden. Set `spring.jpa.open-in-view=false`, and reject `__platform__` as a URL tenant slug.
 
 - [ ] Write `AdminTenantIT`: platform admin creates/lists tenants, grants/revokes membership; duplicate tenant returns `409`; unknown tenant `404`; invalid slug/body `400`; regular users receive `403` on admin mutations.
 - [ ] Write `TenantMembershipIT`: an admin grants a membership; member can reach a temporary tenant echo endpoint; non-member receives `403`; revoked member receives `403` on the next request; unknown tenant receives `404`.
-- [ ] Write `TenantRequestFilterTest`: on one test thread, invoke the filter with an authenticated member and a downstream chain that throws; assert `VerifiedTenantContext.requireTenantId()` fails immediately after the filter returns by exception. Also assert it fails before any tenant request. This focused test may invoke the filter directly with mock request/response objects.
+- [ ] Write `TenantRequestFilterTest`: on one test thread, invoke the filter with an authenticated member and a downstream chain that throws; assert `VerifiedTenantContext.requireTenantId()` fails immediately after the filter returns by exception. Also assert it fails before any tenant request and that membership JPA work finishes in platform scope before the tenant chain begins. This focused test may invoke the filter directly with mock request/response objects.
 - [ ] Run `./mvnw -Dit.test=AdminTenantIT,TenantMembershipIT verify`; expect failures for missing schema and endpoints; run `./mvnw -Dtest=TenantRequestFilterTest test` and expect failure before the filter exists.
-- [ ] Add Flyway schema for global tables and the future project/issue tables, global JDBC catalog, admin endpoints, membership filter/context/resolver, and error handler mappings. Configure filter ordering and transactional boundaries so authorization uses JDBC before any tenant JPA session is opened.
+- [ ] Add Flyway schema for global tables and the future project/issue tables, global JPA entities/repositories/catalog, admin endpoints, scope filter/context/resolver, and error handler mappings. Configure filter ordering and service transaction boundaries so membership JPA work closes before the tenant JPA session opens.
 - [ ] Re-run focused IT and `./mvnw verify`; expect all tests to pass. Complete checkpoint routine and merge before Task 3.
 
-### Task 3: Tenant-scoped projects (checkpoint 4)
+### Task 3: Tenant-scoped projects (checkpoint 5)
 
-**Files:** Create `Project.java`, `ProjectRepository.java`, `ProjectService.java`, `ProjectController.java`, `ProjectIsolationIT.java`, and `codex/checkpoints/checkpoint-4.md`; update README.
+**Files:** Create `Project.java`, `ProjectRepository.java`, `ProjectService.java`, `ProjectController.java`, `ProjectIsolationIT.java`, and `codex/checkpoints/checkpoint-5.md`; update README.
 
-**Interfaces:** `Project` has UUID `id`, `@TenantId String tenantId`, and nonblank `name`. `ProjectService.create(String name)`, `list()`, and `get(UUID id)` are transactional; the service gets tenant scope from Hibernate rather than accepting tenant ID from request bodies. HTTP routes: `POST /api/tenants/{tenantId}/projects`, `GET /api/tenants/{tenantId}/projects`, and `GET /api/tenants/{tenantId}/projects/{projectId}`.
+**Interfaces:** `Project` has UUID `id`, `@TenantId String tenantId`, and nonblank `name`; Hibernate populates `tenantId` on persist. `ProjectRepository extends JpaRepository<Project,UUID>` uses normal `save`, `findById`, and `findAll` under a verified tenant session. `ProjectService.create(String name)`, `list()`, and `get(UUID id)` are transactional; neither repository methods nor service methods accept tenant ID from request bodies. HTTP routes: `POST /api/tenants/{tenantId}/projects`, `GET /api/tenants/{tenantId}/projects`, and `GET /api/tenants/{tenantId}/projects/{projectId}`.
 
-- [ ] Write `ProjectIsolationIT`: create two tenants and memberships through admin HTTP, acquire different real user JWTs, create projects in both, then assert each list shows only its tenant, a known foreign UUID returns `404`, a non-member receives `403`, and blank name returns `400`.
+- [ ] Write `ProjectIsolationIT`: create two tenants and memberships through admin HTTP, acquire different real user JWTs, create projects in both, then assert each list shows only its tenant, a known foreign UUID returns `404`, a non-member receives `403`, and blank name returns `400`. Also assert platform-scoped repository `findAll()` and `findById(knownProjectId)` see no tenant project, proving the reserved scope is not root.
 - [ ] Run `./mvnw -Dit.test=ProjectIsolationIT verify`; expect failures for missing project routes.
 - [ ] Implement project entity/repository/service/controller, ensuring JPA sessions start only after tenant verification and UUID lookups remain tenant-scoped. Return `201` for create and `404` for an absent/foreign project.
 - [ ] Re-run focused IT and `./mvnw verify`; expect all tests to pass. Complete checkpoint routine and merge before Task 4.
 
-### Task 4: Tenant-scoped issues and board (checkpoint 5)
+### Task 4: Tenant-scoped issues and board (checkpoint 6)
 
-**Files:** Create `Issue.java`, `IssueRepository.java`, `IssueService.java`, `IssueController.java`, `IssueStatus.java`, `IssueIsolationIT.java`, `BoardIT.java`, and `codex/checkpoints/checkpoint-5.md`; update README.
+**Files:** Create `Issue.java`, `IssueRepository.java`, `IssueService.java`, `IssueController.java`, `IssueStatus.java`, `IssueIsolationIT.java`, `BoardIT.java`, and `codex/checkpoints/checkpoint-6.md`; update README.
 
-**Interfaces:** `Issue` has UUID `id`, `@TenantId String tenantId`, UUID `projectId`, nonblank `title`, and `IssueStatus status`; creation defaults to `TODO`. `IssueService.create(UUID projectId,String title)`, `list(UUID projectId)`, `get(UUID projectId,UUID issueId)`, `changeStatus(UUID projectId,UUID issueId,IssueStatus status)`, and `board(UUID projectId)` check that the project is visible to the current tenant. Board JSON contains exactly `TODO`, `IN_PROGRESS`, and `DONE` arrays.
+**Interfaces:** `Issue` has UUID `id`, `@TenantId String tenantId`, UUID `projectId`, nonblank `title`, and `IssueStatus status`; Hibernate populates `tenantId` on persist and creation defaults to `TODO`. `IssueRepository extends JpaRepository<Issue,UUID>` adds `findByProjectId(UUID projectId)` for the board/list under the verified tenant session. `IssueService.create(UUID projectId,String title)`, `list(UUID projectId)`, `get(UUID projectId,UUID issueId)`, `changeStatus(UUID projectId,UUID issueId,IssueStatus status)`, and `board(UUID projectId)` check that the project is visible to the current tenant. Board JSON contains exactly `TODO`, `IN_PROGRESS`, and `DONE` arrays.
 
 - [ ] Write `IssueIsolationIT`: create two tenants and projects through public HTTP; give a user membership in both tenants, then use a valid tenant URL with a known foreign project/issue UUID and assert `POST`/`GET`/`PATCH` return `404` without mutation. A user who is not a member of the URL tenant receives `403` before resource lookup. Invalid status/title returns `400`; a direct test-only SQL insert confirms the composite foreign key rejects a cross-tenant issue/project pair.
 - [ ] Write `BoardIT`: create three issues, move one to `IN_PROGRESS` and one to `DONE`, and assert the board has exactly one issue in each column and does not include the other tenant's issues.
@@ -112,6 +114,6 @@ For Task N use branch `codex/checkpoint-<N+1>-<short-name>`; checkpoint 1 is thi
 
 ## Final audit
 
-- [ ] Before checkpoint 5's final evidence commit, run a local smoke test against Compose Keycloak/PostgreSQL and record the result. After the merge, run `./mvnw verify` and `git diff --check` on `main`.
+- [ ] Before checkpoint 6's final evidence commit, run a local smoke test against Compose Keycloak/PostgreSQL and record the result. After the merge, run `./mvnw verify` and `git diff --check` on `main`.
 - [ ] Confirm README matches verified endpoints and setup; confirm no test credentials are used in production configuration.
 - [ ] Confirm `main`, `origin/main`, and remote `main` SHAs match, and all checkpoint branches remain available.
