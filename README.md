@@ -1,6 +1,6 @@
 # TenantMicro
 
-TenantMicro is a learning project for a shared-table multitenant Spring web service. The current checkpoint provides a Spring Boot application, Keycloak JWT authentication, and a real HTTP integration-test harness with PostgreSQL and Keycloak Testcontainers. Tenant management and tenant-owned data APIs are planned next.
+TenantMicro is a learning project for a shared-table multitenant Spring web service. It currently provides Keycloak JWT authentication, platform-admin tenant and membership management, and a verified tenant request boundary. Project and issue APIs are planned next.
 
 ## Prerequisites
 
@@ -25,8 +25,15 @@ SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=http://localhost:8080/realm
 SERVER_PORT=8081 ./mvnw spring-boot:run
 ```
 
-Keycloak's local admin console is at `http://localhost:8080` with `admin` / `admin-dev`. The `tenantmicro` realm includes a `tenantmicro-local` browser client that adds the `tenantmicro-api` audience. Create realm users in the console and assign `PLATFORM_ADMIN` only to platform administrators. Direct access grants are enabled only in the integration-test realm.
+Keycloak's local admin console is at `http://localhost:8080` with `admin` / `admin-dev`. The `tenantmicro` realm includes a `tenantmicro-local` browser client that adds the `tenantmicro-api` audience and sample users `platform-admin` / `platform-admin-dev` and `alice` / `alice-dev`. The platform user has `PLATFORM_ADMIN`. Direct access grants are enabled only in the integration-test realm.
 
-The current API has one endpoint: `GET /api/whoami` returns the authenticated JWT subject. All API requests require a bearer token. `/api/admin/**` requires `PLATFORM_ADMIN`; admin operations will be added in the next checkpoint.
+`GET /api/whoami` returns the authenticated JWT subject. All API requests require a bearer token. `/api/admin/**` requires `PLATFORM_ADMIN`:
+
+- `POST /api/admin/tenants` with `{ "id": "acme", "name": "Acme" }` creates a tenant.
+- `GET /api/admin/tenants` lists tenants.
+- `PUT /api/admin/tenants/{tenantId}/members/{subject}` grants membership idempotently.
+- `DELETE /api/admin/tenants/{tenantId}/members/{subject}` revokes membership idempotently.
+
+`GET /api/tenants/{tenantId}/context` returns the verified tenant ID and JWT subject for an authorized member. Membership is checked against PostgreSQL on every tenant request; a revoked member is denied on the next request.
 
 The [design](docs/superpowers/specs/2026-11-03-tenantmicro-design.md) and [implementation plan](docs/superpowers/plans/2026-11-03-tenantmicro-implementation.md) describe the upcoming tenant boundaries and Jira-style features.
