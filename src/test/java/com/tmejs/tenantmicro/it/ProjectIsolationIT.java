@@ -37,7 +37,11 @@ class ProjectIsolationIT extends IntegrationEnvironment {
 
         assertThat(get("/api/tenants/" + acme + "/projects", alice).body()).contains(acmeId).doesNotContain(betaId);
         assertThat(get("/api/tenants/" + beta + "/projects", bob).body()).contains(betaId).doesNotContain(acmeId);
+        assertThat(json.readTree(get("/api/tenants/" + acme + "/projects/" + acmeId, alice).body())
+                .get("name").asText()).isEqualTo("Delivery");
         assertThat(get("/api/tenants/" + acme + "/projects/" + betaId, alice).statusCode()).isEqualTo(404);
+        assertThat(get("/api/tenants/" + acme + "/projects/" + UUID.randomUUID(), alice).statusCode()).isEqualTo(404);
+        assertThat(get("/api/tenants/" + acme + "/projects/not-a-uuid", alice).statusCode()).isEqualTo(400);
         try (var platform = VerifiedTenantContext.platformScope()) {
             assertThat(projects.findAll()).isEmpty();
             assertThat(projects.findById(UUID.fromString(acmeId))).isEmpty();
