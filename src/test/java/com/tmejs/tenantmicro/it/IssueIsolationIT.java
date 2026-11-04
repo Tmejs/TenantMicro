@@ -29,9 +29,14 @@ class IssueIsolationIT extends IntegrationEnvironment {
         grant(admin, acme, subject);
         grant(admin, beta, subject);
         String acmeProject = createProject(acme, alice, "Acme");
+        String secondAcmeProject = createProject(acme, alice, "Other Acme");
         String betaProject = createProject(beta, alice, "Beta");
         String acmePath = "/api/tenants/" + acme + "/projects/" + acmeProject + "/issues";
+        String secondAcmePath = "/api/tenants/" + acme + "/projects/" + secondAcmeProject + "/issues";
         String betaPath = "/api/tenants/" + beta + "/projects/" + betaProject + "/issues";
+        var acmeCreated = request("POST", acmePath, alice, "{\"title\":\"Acme task\"}");
+        assertThat(acmeCreated.statusCode()).isEqualTo(201);
+        String acmeIssue = json.readTree(acmeCreated.body()).get("id").asText();
         var created = request("POST", betaPath, alice, "{\"title\":\"Secret\"}");
         assertThat(created.statusCode()).isEqualTo(201);
         String betaIssue = json.readTree(created.body()).get("id").asText();
@@ -42,6 +47,10 @@ class IssueIsolationIT extends IntegrationEnvironment {
         assertThat(get(acmePath + "/" + betaIssue, alice).statusCode()).isEqualTo(404);
         assertThat(request("PATCH", acmePath + "/" + betaIssue + "/status", alice,
                 "{\"status\":\"DONE\"}").statusCode()).isEqualTo(404);
+        assertThat(get(secondAcmePath + "/" + acmeIssue, alice).statusCode()).isEqualTo(404);
+        assertThat(request("PATCH", secondAcmePath + "/" + acmeIssue + "/status", alice,
+                "{\"status\":\"DONE\"}").statusCode()).isEqualTo(404);
+        assertThat(json.readTree(get(acmePath + "/" + acmeIssue, alice).body()).get("status").asText()).isEqualTo("TODO");
         assertThat(json.readTree(get(betaPath + "/" + betaIssue, alice).body()).get("status").asText()).isEqualTo("TODO");
         assertThat(get(acmePath, bob).statusCode()).isEqualTo(403);
         assertThat(request("POST", acmePath, alice, "{\"title\":\" \"}").statusCode()).isEqualTo(400);
