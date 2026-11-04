@@ -1,6 +1,6 @@
 # TenantMicro
 
-TenantMicro is a learning project for a shared-table multitenant Spring web service. It currently provides Keycloak JWT authentication, platform-admin tenant and membership management, verified tenant request boundaries, and tenant-owned projects. Issue and board APIs are planned next.
+TenantMicro is a learning project for a shared-table multitenant Spring web service. It provides Keycloak JWT authentication, platform-admin tenant and membership management, verified tenant request boundaries, tenant-owned projects and issues, and a three-column project board.
 
 ## Prerequisites
 
@@ -43,5 +43,14 @@ Tenant members can create and read projects:
 - `GET /api/tenants/{tenantId}/projects/{projectId}` reads one project. A known project ID from another tenant returns `404`.
 
 The project repository is a normal Spring Data `JpaRepository`. Hibernate `@TenantId` fills and filters `tenant_id` from the verified request scope; the API never accepts it from JSON.
+
+Tenant members can manage issues within a visible project:
+
+- `POST /api/tenants/{tenantId}/projects/{projectId}/issues` with `{ "title": "First task" }` creates an issue in `TODO`.
+- `GET /api/tenants/{tenantId}/projects/{projectId}/issues` lists the project's issues; append `/{issueId}` to read one.
+- `PATCH /api/tenants/{tenantId}/projects/{projectId}/issues/{issueId}/status` with `{ "status": "IN_PROGRESS" }` moves an issue among `TODO`, `IN_PROGRESS`, and `DONE`.
+- `GET /api/tenants/{tenantId}/projects/{projectId}/board` groups the project's issues into those three columns.
+
+The issue repository also uses `JpaRepository` and `@TenantId`. The database has a composite foreign key from `(issues.tenant_id, issues.project_id)` to `(projects.tenant_id, projects.id)`; a cross-tenant link is rejected even if application code misses a check.
 
 The [design](docs/superpowers/specs/2026-11-03-tenantmicro-design.md) and [implementation plan](docs/superpowers/plans/2026-11-03-tenantmicro-implementation.md) describe the upcoming tenant boundaries and Jira-style features.
