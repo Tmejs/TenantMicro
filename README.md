@@ -12,7 +12,7 @@ Java 21 and a running Docker daemon. The Maven wrapper downloads Maven 3.9.6 on 
 ./mvnw verify
 ```
 
-The `JwtSecurityIT` integration tests start PostgreSQL and Keycloak containers, acquire real access tokens, and check subject, audience, signature, expiry, and admin-route access over HTTP.
+The integration tests start PostgreSQL and Keycloak containers, acquire real access tokens, and run requests through Spring MVC and Security with `MockMvc`. They cover JWT validation, tenant membership, and project isolation without opening a local application port.
 
 ## Run locally
 

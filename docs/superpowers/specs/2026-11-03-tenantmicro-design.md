@@ -2,7 +2,7 @@
 
 ## Intent
 
-Build a learning-focused Java Spring REST microservice that demonstrates the complete HTTP-to-database flow of a shared-table multitenant application. It should make tenant authorization and isolation visible in code and prove the boundary through real HTTP integration tests.
+Build a learning-focused Java Spring REST microservice that demonstrates the complete HTTP-to-database flow of a shared-table multitenant application. It should make tenant authorization and isolation visible in code and prove the boundary through integration tests.
 
 ## Scope
 
@@ -11,7 +11,7 @@ Build a learning-focused Java Spring REST microservice that demonstrates the com
 - Keycloak issues JWTs. The service validates the issuer, signature, expiry, and audience. A Keycloak realm role `PLATFORM_ADMIN` protects global administration endpoints. Tenant membership is stored in the service database and checked on every tenant-scoped request.
 - Tenant-scoped URLs begin with `/api/tenants/{tenantId}`. The path identifies the requested tenant; it never authorizes access by itself.
 - PostgreSQL uses shared tables. Every project and issue row has a `tenant_id`. Cross-tenant project/issue relationships are rejected by database constraints as well as application checks.
-- Main paths and isolation failures are covered by HTTP integration tests using Testcontainers for PostgreSQL and Keycloak. Tests provision tenants and memberships through admin endpoints, obtain real JWTs, and use the public API. Unit tests are limited to logic that cannot be tested clearly through integration tests.
+- Main paths and isolation failures are covered by Spring MVC integration tests using Testcontainers for PostgreSQL and Keycloak. Tests provision tenants and memberships through admin endpoints, obtain real JWTs, and use the public API. Unit tests are limited to logic that cannot be tested clearly through integration tests.
 
 ## Boundaries and data model
 
@@ -48,9 +48,11 @@ All JSON payloads reject blank names/titles and malformed IDs with `400`. A miss
 
 ## Local development and testing
 
+Test-harness amendment (2026-11-03): the user chose `MockMvc` for integration tests. The tests still start real PostgreSQL and Keycloak Testcontainers and use real Keycloak JWTs; application requests run through the Spring MVC and Security filter chain in process.
+
 Pin Spring Boot to 4.1.2, Java to 21, Keycloak container to 26.8.1, and PostgreSQL container to 17.6 in the initial implementation. Keep credentials and test users in local development/test configuration only. Provide a local Keycloak realm import with the platform role, audience, and sample users, plus a Docker Compose setup for Keycloak and PostgreSQL.
 
-Tests use Testcontainers for both PostgreSQL and Keycloak and real HTTP calls to a random-port Spring Boot instance. A test-only Keycloak client may use direct access grants to acquire user JWTs; that grant must not be enabled for a production client. Test fixtures create tenants and memberships via admin endpoints, not direct inserts. The full local gate is `./mvnw verify`, including integration tests, with Docker available; no GitHub Actions gate is required.
+Tests use Testcontainers for both PostgreSQL and Keycloak and `MockMvc` against a full Spring Boot context. A test-only Keycloak client may use direct access grants to acquire user JWTs; that grant must not be enabled for a production client. Test fixtures create tenants and memberships via admin endpoints, not direct inserts. The full local gate is `./mvnw verify`, including integration tests, with Docker available; no GitHub Actions gate is required.
 
 Critical isolation scenarios: two tenant users see only their own projects/issues; known foreign UUIDs cannot be read or changed; missing/invalid JWT and absent membership are rejected; membership revocation takes effect on the next request; project/issue constraints reject cross-tenant references; context does not leak across sequential requests or exceptions; platform scope cannot read tenant-owned rows or become a root tenant; admin endpoints reject non-admin tokens.
 

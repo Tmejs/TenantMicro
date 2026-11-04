@@ -42,7 +42,7 @@ class SecurityConfig {
     JwtDecoder jwtDecoder(@Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri}") String issuer,
                           @Value("${app.security.clock-skew:60s}") Duration clockSkew) {
         NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(issuer + "/protocol/openid-connect/certs").build();
-        OAuth2TokenValidator<Jwt> audience = jwt -> jwt.getAudience().contains("tenantmicro-api")
+        OAuth2TokenValidator<Jwt> audience = jwt -> jwt.getAudience() != null && jwt.getAudience().contains("tenantmicro-api")
                 ? OAuth2TokenValidatorResult.success()
                 : OAuth2TokenValidatorResult.failure(new OAuth2Error("invalid_token", "Missing tenantmicro-api audience", null));
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(

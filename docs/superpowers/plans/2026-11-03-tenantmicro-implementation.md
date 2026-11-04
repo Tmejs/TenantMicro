@@ -10,13 +10,15 @@
 
 **Spec:** `docs/superpowers/specs/2026-11-03-tenantmicro-design.md`
 
+**Test-harness amendment (2026-11-03):** At the user's request, checkpoint 6 converts the integration tests to `MockMvc` with a full Spring context and real PostgreSQL/Keycloak Testcontainers. This replaces the random-port HTTP client in the remaining plan. The issue/board task moves to checkpoint 7; its test assertions and isolation goals stay the same.
+
 ## Global Constraints
 
 - Do not use Git worktrees. Each numbered implementation task below is a separate checkpoint branch created from clean synchronized `main`; merge and verify it before starting the next.
 - Keep the root README limited to behavior actually verified by the completed checkpoint.
 - No GitHub Actions gate; run focused tests, `./mvnw verify`, and `git diff --check` locally before push.
 - Obtain independent review before each push; fix and re-review Critical/Important findings. Record review and verification in `codex/checkpoints/`.
-- Use real HTTP integration tests with Testcontainers PostgreSQL and Keycloak as the primary test layer. Keep unit tests scarce and purposeful.
+- Use `MockMvc` integration tests with Testcontainers PostgreSQL and Keycloak as the primary test layer. Keep unit tests scarce and purposeful.
 - Use `JpaRepository` for all four entities. Annotate only tenant-owned entities with `@TenantId`, never accept or assign their tenant ID from HTTP bodies, and do not use native/bulk SQL for tenant-owned runtime paths.
 - No code for epics, sprints, frontend, project-level roles, async jobs, or tenant deletion in this plan.
 
@@ -44,15 +46,15 @@ The paths below are the intended small units; keep request DTOs and response DTO
 - `project/Project.java`, `project/ProjectRepository.java`, `project/ProjectService.java`, `project/ProjectController.java`: tenant-owned projects and endpoints.
 - `issue/Issue.java`, `issue/IssueRepository.java`, `issue/IssueService.java`, `issue/IssueController.java`, `issue/IssueStatus.java`: tenant-owned issues, status changes, and board endpoint.
 - `api/ApiExceptionHandler.java`: consistent problem responses.
-- `src/test/java/com/tmejs/tenantmicro/it/IntegrationEnvironment.java`: shared Testcontainers PostgreSQL/Keycloak lifecycle, real token acquisition, and HTTP client helpers.
-- `src/test/java/com/tmejs/tenantmicro/it/*IT.java`: HTTP-level scenario tests.
+- `src/test/java/com/tmejs/tenantmicro/it/IntegrationEnvironment.java`: shared Testcontainers PostgreSQL/Keycloak lifecycle, real token acquisition, and `MockMvc` request helpers.
+- `src/test/java/com/tmejs/tenantmicro/it/*IT.java`: Spring MVC scenario tests.
 - `src/test/java/com/tmejs/tenantmicro/security/TenantRequestFilterTest.java`: focused same-thread exception cleanup test; this is the one small unit test justified by the context-lifecycle risk.
 - `dev/realm.json`, `compose.yaml`: local Keycloak/PostgreSQL and test identity configuration.
 - `codex/checkpoints/checkpoint-<number>.md`: evidence for each implementation checkpoint.
 
 ## Checkpoint routine for every task
 
-For Task N use branch `codex/checkpoint-<N+2>-<short-name>`; checkpoint 1 is the initial documentation plan and checkpoint 2 updates it for JPA repositories. Start each task with the first two steps below, then do its focused implementation steps, then finish the remaining steps in order:
+Tasks 1–3 use branches `codex/checkpoint-<N+2>-<short-name>`; checkpoint 1 is the initial documentation plan and checkpoint 2 updates it for JPA repositories. Checkpoint 6 converts the test harness to MockMvc; Task 4 uses checkpoint 7. Start each task with the first two steps below, then do its focused implementation steps, then finish the remaining steps in order:
 
 - [ ] Confirm `main` and the working tree are clean; `git fetch origin`; inspect unexpected remote commits; confirm `git rev-parse main` equals `git rev-parse origin/main` and `git ls-remote --heads origin main`.
 - [ ] Create the named branch from synchronized `main` in the same checkout, with `git switch -c ...`.
@@ -68,7 +70,7 @@ For Task N use branch `codex/checkpoint-<N+2>-<short-name>`; checkpoint 1 is the
 
 **Files:** Create build/wrapper files, application entry point/configuration, security files, `api/ApiExceptionHandler.java`, `dev/realm.json`, `compose.yaml`, `IntegrationEnvironment.java`, `JwtSecurityIT.java`, and `codex/checkpoints/checkpoint-3.md`; update README with verified start/test instructions.
 
-**Interfaces:** `RealmRoleConverter` maps Keycloak `realm_access.roles` to `ROLE_*`; `SecurityConfig` validates issuer, audience `tenantmicro-api`, signature, expiry, and secures `/api/admin/**` for `ROLE_PLATFORM_ADMIN`. `IntegrationEnvironment` supplies `adminToken()`, `userToken(String username)`, and an HTTP client configured for a random server port. No tenant APIs yet; a simple authenticated `/api/whoami` endpoint proves the JWT flow and returns `sub`.
+**Interfaces:** `RealmRoleConverter` maps Keycloak `realm_access.roles` to `ROLE_*`; `SecurityConfig` validates issuer, audience `tenantmicro-api`, signature, expiry, and secures `/api/admin/**` for `ROLE_PLATFORM_ADMIN`. `IntegrationEnvironment` supplies `adminToken()`, `userToken(String username)`, and `MockMvc` request helpers after checkpoint 6. No tenant APIs yet; a simple authenticated `/api/whoami` endpoint proves the JWT flow and returns `sub`.
 
 - [ ] Add the Maven wrapper and minimal `pom.xml` with Boot 4.1.2, Java 21, JUnit, Failsafe `*IT` binding, and Testcontainers dependencies; confirm `./mvnw -version` runs.
 - [ ] Write `JwtSecurityIT` using Testcontainers PostgreSQL and Keycloak. Assert valid user token returns `200` and its subject from `/api/whoami`; missing, expired/invalid-signature, and wrong-audience tokens return `401`; non-admin token at `/api/admin/tenants` returns `403`.
@@ -100,13 +102,13 @@ For Task N use branch `codex/checkpoint-<N+2>-<short-name>`; checkpoint 1 is the
 - [ ] Implement project entity/repository/service/controller, ensuring JPA sessions start only after tenant verification and UUID lookups remain tenant-scoped. Return `201` for create and `404` for an absent/foreign project.
 - [ ] Re-run focused IT and `./mvnw verify`; expect all tests to pass. Complete checkpoint routine and merge before Task 4.
 
-### Task 4: Tenant-scoped issues and board (checkpoint 6)
+### Task 4: Tenant-scoped issues and board (checkpoint 7)
 
-**Files:** Create `Issue.java`, `IssueRepository.java`, `IssueService.java`, `IssueController.java`, `IssueStatus.java`, `IssueIsolationIT.java`, `BoardIT.java`, and `codex/checkpoints/checkpoint-6.md`; update README.
+**Files:** Create `Issue.java`, `IssueRepository.java`, `IssueService.java`, `IssueController.java`, `IssueStatus.java`, `IssueIsolationIT.java`, `BoardIT.java`, and `codex/checkpoints/checkpoint-7.md`; update README.
 
 **Interfaces:** `Issue` has UUID `id`, `@TenantId String tenantId`, UUID `projectId`, nonblank `title`, and `IssueStatus status`; Hibernate populates `tenantId` on persist and creation defaults to `TODO`. `IssueRepository extends JpaRepository<Issue,UUID>` adds `findByProjectId(UUID projectId)` for the board/list under the verified tenant session. `IssueService.create(UUID projectId,String title)`, `list(UUID projectId)`, `get(UUID projectId,UUID issueId)`, `changeStatus(UUID projectId,UUID issueId,IssueStatus status)`, and `board(UUID projectId)` check that the project is visible to the current tenant. Board JSON contains exactly `TODO`, `IN_PROGRESS`, and `DONE` arrays.
 
-- [ ] Write `IssueIsolationIT`: create two tenants and projects through public HTTP; give a user membership in both tenants, then use a valid tenant URL with a known foreign project/issue UUID and assert `POST`/`GET`/`PATCH` return `404` without mutation. A user who is not a member of the URL tenant receives `403` before resource lookup. Invalid status/title returns `400`; a direct test-only SQL insert confirms the composite foreign key rejects a cross-tenant issue/project pair.
+- [ ] Write `IssueIsolationIT`: create two tenants and projects through `MockMvc`; give a user membership in both tenants, then use a valid tenant URL with a known foreign project/issue UUID and assert `POST`/`GET`/`PATCH` return `404` without mutation. A user who is not a member of the URL tenant receives `403` before resource lookup. Invalid status/title returns `400`; a direct test-only SQL insert confirms the composite foreign key rejects a cross-tenant issue/project pair.
 - [ ] Write `BoardIT`: create three issues, move one to `IN_PROGRESS` and one to `DONE`, and assert the board has exactly one issue in each column and does not include the other tenant's issues.
 - [ ] Run `./mvnw -Dit.test=IssueIsolationIT,BoardIT verify`; expect failures for missing issue routes.
 - [ ] Implement issue endpoints, default/status transitions, board grouping, and tenant-safe lookups. Preserve the composite foreign key in the migration; no new table migration should be needed if Task 2 created the schema correctly.
@@ -114,6 +116,6 @@ For Task N use branch `codex/checkpoint-<N+2>-<short-name>`; checkpoint 1 is the
 
 ## Final audit
 
-- [ ] Before checkpoint 6's final evidence commit, run a local smoke test against Compose Keycloak/PostgreSQL and record the result. After the merge, run `./mvnw verify` and `git diff --check` on `main`.
+- [ ] Before checkpoint 7's final evidence commit, run a local smoke test against Compose Keycloak/PostgreSQL and record the result. After the merge, run `./mvnw verify` and `git diff --check` on `main`.
 - [ ] Confirm README matches verified endpoints and setup; confirm no test credentials are used in production configuration.
 - [ ] Confirm `main`, `origin/main`, and remote `main` SHAs match, and all checkpoint branches remain available.
