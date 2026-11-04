@@ -46,7 +46,7 @@ The paths below are the intended small units; keep request DTOs and response DTO
 - `project/Project.java`, `project/ProjectRepository.java`, `project/ProjectService.java`, `project/ProjectController.java`: tenant-owned projects and endpoints.
 - `issue/Issue.java`, `issue/IssueRepository.java`, `issue/IssueService.java`, `issue/IssueController.java`, `issue/IssueStatus.java`: tenant-owned issues, status changes, and board endpoint.
 - `api/ApiExceptionHandler.java`: consistent problem responses.
-- `src/test/java/com/tmejs/tenantmicro/it/IntegrationEnvironment.java`: shared Testcontainers PostgreSQL/Keycloak lifecycle, real token acquisition, and HTTP client helpers.
+- `src/test/java/com/tmejs/tenantmicro/it/IntegrationEnvironment.java`: shared Testcontainers PostgreSQL/Keycloak lifecycle, real token acquisition, and `MockMvc` request helpers.
 - `src/test/java/com/tmejs/tenantmicro/it/*IT.java`: Spring MVC scenario tests.
 - `src/test/java/com/tmejs/tenantmicro/security/TenantRequestFilterTest.java`: focused same-thread exception cleanup test; this is the one small unit test justified by the context-lifecycle risk.
 - `dev/realm.json`, `compose.yaml`: local Keycloak/PostgreSQL and test identity configuration.
@@ -70,7 +70,7 @@ Tasks 1–3 use branches `codex/checkpoint-<N+2>-<short-name>`; checkpoint 1 is 
 
 **Files:** Create build/wrapper files, application entry point/configuration, security files, `api/ApiExceptionHandler.java`, `dev/realm.json`, `compose.yaml`, `IntegrationEnvironment.java`, `JwtSecurityIT.java`, and `codex/checkpoints/checkpoint-3.md`; update README with verified start/test instructions.
 
-**Interfaces:** `RealmRoleConverter` maps Keycloak `realm_access.roles` to `ROLE_*`; `SecurityConfig` validates issuer, audience `tenantmicro-api`, signature, expiry, and secures `/api/admin/**` for `ROLE_PLATFORM_ADMIN`. `IntegrationEnvironment` supplies `adminToken()`, `userToken(String username)`, and an HTTP client configured for a random server port. No tenant APIs yet; a simple authenticated `/api/whoami` endpoint proves the JWT flow and returns `sub`.
+**Interfaces:** `RealmRoleConverter` maps Keycloak `realm_access.roles` to `ROLE_*`; `SecurityConfig` validates issuer, audience `tenantmicro-api`, signature, expiry, and secures `/api/admin/**` for `ROLE_PLATFORM_ADMIN`. `IntegrationEnvironment` supplies `adminToken()`, `userToken(String username)`, and `MockMvc` request helpers after checkpoint 6. No tenant APIs yet; a simple authenticated `/api/whoami` endpoint proves the JWT flow and returns `sub`.
 
 - [ ] Add the Maven wrapper and minimal `pom.xml` with Boot 4.1.2, Java 21, JUnit, Failsafe `*IT` binding, and Testcontainers dependencies; confirm `./mvnw -version` runs.
 - [ ] Write `JwtSecurityIT` using Testcontainers PostgreSQL and Keycloak. Assert valid user token returns `200` and its subject from `/api/whoami`; missing, expired/invalid-signature, and wrong-audience tokens return `401`; non-admin token at `/api/admin/tenants` returns `403`.
