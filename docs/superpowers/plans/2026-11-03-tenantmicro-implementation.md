@@ -18,7 +18,7 @@
 - Keep the root README limited to behavior actually verified by the completed checkpoint.
 - No GitHub Actions gate; run focused tests, `./mvnw verify`, and `git diff --check` locally before push.
 - Obtain independent review before each push; fix and re-review Critical/Important findings. Record review and verification in `codex/checkpoints/`.
-- Use real HTTP integration tests with Testcontainers PostgreSQL and Keycloak as the primary test layer. Keep unit tests scarce and purposeful.
+- Use `MockMvc` integration tests with Testcontainers PostgreSQL and Keycloak as the primary test layer. Keep unit tests scarce and purposeful.
 - Use `JpaRepository` for all four entities. Annotate only tenant-owned entities with `@TenantId`, never accept or assign their tenant ID from HTTP bodies, and do not use native/bulk SQL for tenant-owned runtime paths.
 - No code for epics, sprints, frontend, project-level roles, async jobs, or tenant deletion in this plan.
 
@@ -47,7 +47,7 @@ The paths below are the intended small units; keep request DTOs and response DTO
 - `issue/Issue.java`, `issue/IssueRepository.java`, `issue/IssueService.java`, `issue/IssueController.java`, `issue/IssueStatus.java`: tenant-owned issues, status changes, and board endpoint.
 - `api/ApiExceptionHandler.java`: consistent problem responses.
 - `src/test/java/com/tmejs/tenantmicro/it/IntegrationEnvironment.java`: shared Testcontainers PostgreSQL/Keycloak lifecycle, real token acquisition, and HTTP client helpers.
-- `src/test/java/com/tmejs/tenantmicro/it/*IT.java`: HTTP-level scenario tests.
+- `src/test/java/com/tmejs/tenantmicro/it/*IT.java`: Spring MVC scenario tests.
 - `src/test/java/com/tmejs/tenantmicro/security/TenantRequestFilterTest.java`: focused same-thread exception cleanup test; this is the one small unit test justified by the context-lifecycle risk.
 - `dev/realm.json`, `compose.yaml`: local Keycloak/PostgreSQL and test identity configuration.
 - `codex/checkpoints/checkpoint-<number>.md`: evidence for each implementation checkpoint.
@@ -104,11 +104,11 @@ Tasks 1–3 use branches `codex/checkpoint-<N+2>-<short-name>`; checkpoint 1 is 
 
 ### Task 4: Tenant-scoped issues and board (checkpoint 7)
 
-**Files:** Create `Issue.java`, `IssueRepository.java`, `IssueService.java`, `IssueController.java`, `IssueStatus.java`, `IssueIsolationIT.java`, `BoardIT.java`, and `codex/checkpoints/checkpoint-6.md`; update README.
+**Files:** Create `Issue.java`, `IssueRepository.java`, `IssueService.java`, `IssueController.java`, `IssueStatus.java`, `IssueIsolationIT.java`, `BoardIT.java`, and `codex/checkpoints/checkpoint-7.md`; update README.
 
 **Interfaces:** `Issue` has UUID `id`, `@TenantId String tenantId`, UUID `projectId`, nonblank `title`, and `IssueStatus status`; Hibernate populates `tenantId` on persist and creation defaults to `TODO`. `IssueRepository extends JpaRepository<Issue,UUID>` adds `findByProjectId(UUID projectId)` for the board/list under the verified tenant session. `IssueService.create(UUID projectId,String title)`, `list(UUID projectId)`, `get(UUID projectId,UUID issueId)`, `changeStatus(UUID projectId,UUID issueId,IssueStatus status)`, and `board(UUID projectId)` check that the project is visible to the current tenant. Board JSON contains exactly `TODO`, `IN_PROGRESS`, and `DONE` arrays.
 
-- [ ] Write `IssueIsolationIT`: create two tenants and projects through public HTTP; give a user membership in both tenants, then use a valid tenant URL with a known foreign project/issue UUID and assert `POST`/`GET`/`PATCH` return `404` without mutation. A user who is not a member of the URL tenant receives `403` before resource lookup. Invalid status/title returns `400`; a direct test-only SQL insert confirms the composite foreign key rejects a cross-tenant issue/project pair.
+- [ ] Write `IssueIsolationIT`: create two tenants and projects through `MockMvc`; give a user membership in both tenants, then use a valid tenant URL with a known foreign project/issue UUID and assert `POST`/`GET`/`PATCH` return `404` without mutation. A user who is not a member of the URL tenant receives `403` before resource lookup. Invalid status/title returns `400`; a direct test-only SQL insert confirms the composite foreign key rejects a cross-tenant issue/project pair.
 - [ ] Write `BoardIT`: create three issues, move one to `IN_PROGRESS` and one to `DONE`, and assert the board has exactly one issue in each column and does not include the other tenant's issues.
 - [ ] Run `./mvnw -Dit.test=IssueIsolationIT,BoardIT verify`; expect failures for missing issue routes.
 - [ ] Implement issue endpoints, default/status transitions, board grouping, and tenant-safe lookups. Preserve the composite foreign key in the migration; no new table migration should be needed if Task 2 created the schema correctly.
